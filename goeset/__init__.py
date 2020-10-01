@@ -1,0 +1,1 @@
+from .goeset import GoesAsciiFile
