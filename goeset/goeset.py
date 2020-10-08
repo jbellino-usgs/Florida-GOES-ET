@@ -179,6 +179,7 @@ class GoesAsciiFile(object):
         pstr = ', '.join([p for p in self.dtype_dict.keys() if p not in ignore])
         s += f' Please choose from the following parameters: {pstr}.'
         assert param.lower() in [d.lower() for d in self.dtype_dict.keys()], s
+        param = list(self.dtype_dict.keys())[list(self.dtype_dict.keys()).index(param.lower())]
         if flush:
             self.get_dataframe(flush=flush)
         if self._df is None:
