@@ -174,6 +174,11 @@ class GoesAsciiFile(object):
         array : numpy.maskedarray
 
         """
+        s = f'Specified parameter {param} not recognized.'
+        ignore = ['YYYYYMMDD', 'Lat', 'Lon', 'NRpix']
+        pstr = ', '.join([p for p in self.dtype_dict.keys() if p not in ignore])
+        s += f' Please choose from the following parameters: {pstr}.'
+        assert param.lower() in [d.lower() for d in self.dtype_dict.keys()], s
         if flush:
             self.get_dataframe(flush=flush)
         if self._df is None:
