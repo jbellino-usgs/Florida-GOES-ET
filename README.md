@@ -15,7 +15,7 @@ GoesET requires **Python** 3.7 (or higher)
 
 **Dependencies:**
 
-GoesET requires **NumPy** 1.18 (or higher), **Pandas** 1.0.5 (or higher), and **GeoPandas** 0.8.1 (or higher). GoesET may work with different versions of these packages, however they have not been tested.
+GoesET requires **NumPy** 1.18 (or higher), **Pandas** 1.0.5 (or higher), and **netCDF4** 1.4.2 (or higher). GoesET may work with different versions of these packages, however they have not been tested.
 
 
 **Cloning the repository:**
