@@ -349,10 +349,12 @@ class GoesNetcdfFile(object):
         if wmd is not None:
             if isinstance(wmd, str):
                 wmd = [wmd]
+            wmd = [w.upper() for w in wmd]
             subset['wmd'] = wmd
         if county is not None:
             if isinstance(county, str):
                 county = [county]
+            county = [int(c).zfill(3) for c in county]
             subset['county_cd'] = county
 
         # Make sure arrays have been loaded
