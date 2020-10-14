@@ -1,10 +1,8 @@
 import os
 import netCDF4
-import pyproj
 import pandas as pd
 import geopandas as gpd
 import numpy as np
-from datetime import datetime
 
 ancpth = os.path.join(os.path.dirname(__file__), 'ancillary')
 shppth = os.path.join(os.path.dirname(__file__), 'shp')
@@ -46,8 +44,9 @@ class GoesAsciiFile(object):
         self.nrow, self.ncol = 407, 474
         self._df = None
         self._dates = None
-        self._x, self._y = self._get_xy_arrays()
-        self._latitude, self._longitude = self._get_latlon_arrays()
+        # self._x, self._y = self._get_xy_arrays()
+        # self._latitude, self._longitude = self._get_latlon_arrays()
+        self._oldfmt, self._header = self.get_header()
 
     @property
     def df(self):
@@ -58,20 +57,8 @@ class GoesAsciiFile(object):
         return self._dates
 
     @property
-    def x(self):
-        return self._x
-
-    @property
-    def y(self):
-        return self._y
-
-    @property
-    def latitude(self):
-        return self._latitude
-
-    @property
-    def longitude(self):
-        return self._longitude
+    def header(self):
+        return self._header
 
     @staticmethod
     def get_pixels():
@@ -84,6 +71,18 @@ class GoesAsciiFile(object):
         pixels = pd.read_csv(fname, index_col=['NRpix'], dtype=dtype)
         pixels = pixels.sort_index()
         return pixels
+
+    def get_header(self):
+        with open(self.fpth, 'r') as f:
+            header = f.readline()
+        if 'YYYYMMDD' in header:
+            header = header.strip().split()
+            oldfmt = False
+        else:
+            oldfmt = True
+            header = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix', 'PET', 'ETo',
+                      'Solar', 'RHmax', 'RHmin', 'Tmax', 'Tmin', 'ws2m']
+        return oldfmt, header
 
     def get_dataframe(self, flush=True, **kwargs):
         """
@@ -113,48 +112,33 @@ class GoesAsciiFile(object):
         data : pandas.DataFrame
 
         """
-
-        dtype = {'YYYYMMDD': str, 'Lat': float, 'Lon': float,
-                 'NRpix': int}
-        usecols = list(dtype.keys())
-
-        # Determine whether the file has new format or old
-        with open(self.fpth, 'r') as f:
-            header = f.readline()
-
-        oldfmt = True
-        if 'YYYYMMDD' in header:
-            oldfmt = False
+        usecols = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix']
 
         # Check specified parameter name against available columns
-        if oldfmt:
-            params = ['PET', 'RET', 'RS', 'Rhmax', 'Rhmin',
-                      'Tmax', 'Tmin', 'Ws']
-            if 'usecols' in kwargs.keys():
-                usecols += usecols
-            # dtype += {'PET': float, 'RET': float,
-            #           'RS': float, 'Rhmax': float, 'Rhmin': float,
-            #           'Tmax': float, 'Tmin': float, 'Ws': float}
-            else:
-                usecols += params
+        if 'usecols' in kwargs.keys():
+            cols = kwargs['usecols']
+            if isinstance(cols, str):
+                cols = [cols]
+            check = all(item in cols for item in self._header)
+            assert check, 'One or more parameters pass in the usecols argument are invalid.'
+            usecols = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix'] + cols
+        else:
+            usecols = self._header
+
+        if self._oldfmt:
             header = None
             skiprows = 0
-            names = usecols
 
         else:
-            if 'usecols' in kwargs.keys():
-                usecols += usecols
-            else:
-                usecols += [c for c in header.split() if c not in usecols]
-            names = usecols
             header = 'infer'
             skiprows = 1
 
         # Read the file
-        date_parser = lambda x: datetime.strptime(x, "%Y%m%d")
-        data = pd.read_csv(self.fpth, delim_whitespace=True, dtype=dtype, names=names,
-                           header=header, low_memory=True, skiprows=skiprows,
-                           parse_dates=['YYYYMMDD'], date_parser=date_parser, **kwargs)
+        dtype = {'YYYYMMDD': str, 'Lat': float, 'Lon': float,
+                 'NRpix': int}
+        data = pd.read_csv(self.fpth, delim_whitespace=True, dtype=dtype,
+                           usecols=usecols, names=usecols, header=header,
+                           low_memory=True, skiprows=skiprows, **kwargs)
 
         # Replace nodata values
         data = data.replace(self.nodata_value, np.nan)
@@ -177,28 +161,10 @@ class GoesAsciiFile(object):
         array : numpy.maskedarray
 
         """
-
-        # Determine whether the file has new format or old
-        with open(self.fpth, 'r') as f:
-            header = f.readline()
-
-        oldfmt = True
-        if 'YYYYMMDD' in header:
-            oldfmt = False
-
         # Check specified parameter name against available columns
-        if oldfmt:
-            params = ['PET', 'RET', 'RS', 'Rhmax', 'Rhmin',
-                     'Tmax', 'Tmin', 'Ws']
-        else:
-            ignore = ['YYYYMMDD', 'Lat', 'Lon', 'NRPIX']
-            params = [p for p in header.split() if p not in ignore]
-
-        s = f'Specified parameter {param} not recognized.'
-        pstr = ', '.join(params)
-        s += f' Please choose from the following parameters: {pstr}.'
-        assert param.lower() in [p.lower() for p in params], s
-        param = params[[p.lower() for p in params].index(param.lower())]
+        s = f'Specified parameter "{param}" not recognized.'
+        assert param.lower() in [p.lower() for p in self._header], s
+        param = self._header[[p.lower() for p in self._header].index(param.lower())]
         if flush:
             self.get_dataframe(flush=flush)
         if self._df is None:
@@ -208,7 +174,11 @@ class GoesAsciiFile(object):
         df = self._df[['YYYYMMDD', 'NRpix', param]].copy()
 
         # Get list of unique dates in this file
-        dates = df.YYYYMMDD.dt.strftime('%Y-%m-%d').unique()
+        try:
+            dates = df.YYYYMMDD.dt.strftime('%Y-%m-%d').unique()
+        except AttributeError:
+            # Not datetime objects
+            dates = df.YYYYMMDD.unique()
 
         # Set date index
         df = df.set_index('NRpix')
@@ -225,23 +195,6 @@ class GoesAsciiFile(object):
         array = np.ma.masked_equal(array, self.nodata_value)
         array = array.reshape((len(dates), self.nrow, self.ncol), order='f')
         return array[:, ::-1, ::-1]
-
-    @staticmethod
-    def _get_latlon_arrays():
-        """
-        Get 2-d arrays of latitude and longitude values.
-        :return:
-        """
-        fpth = os.path.join(ancpth, 'latitude.ref')
-        latarr = np.loadtxt(fpth)
-        fpth = os.path.join(ancpth, 'longitude.ref')
-        lonarr = np.loadtxt(fpth)
-        return latarr, lonarr
-
-    def _get_xy_arrays(self):
-        latarr, lonarr = self._get_latlon_arrays()
-        proj = pyproj.Proj(self.aea_proj4)
-        return proj(lonarr, latarr)
 
 
 class GoesNetcdfFile(object):
@@ -319,21 +272,14 @@ class GoesNetcdfFile(object):
             assert param in ncfile.variables.keys(), s
             return ncfile.variables[param][:]
 
-    def tabularize(self, fout=None, vars=None, wmd=None, county=None):
+    def tabularize(self, params=None):
         """
         Tabularize numpy ndarray to legacy ASCII file format.
 
         Parameters
         ----------
-        fout : str (optional)
-            Name of the desired output file.
-        vars : str or list of str
+        params : str or list of str
             List of the parameter names to tabularize.
-        wmd : str or list of str
-            List of water management district abbreviations
-            to subset the data by.
-        county : str or list of str
-            List of county FIPS codes to subset the data by.
 
         Returns
         -------
@@ -343,31 +289,24 @@ class GoesNetcdfFile(object):
         --------
         >>> import goeset
         >>> ncfile = goeset.GoesNetcdfFile('fl.et.2019.v.1.0.nc')
-        >>> ncfile.tabularize('subset.txt', wmd=['SWFWMD', 'SRWMD'])
+        >>> tabular_data = ncfile.tabularize()
         """
-        subset = {}
-        if wmd is not None:
-            if isinstance(wmd, str):
-                wmd = [wmd]
-            wmd = [w.upper() for w in wmd]
-            subset['wmd'] = wmd
-        if county is not None:
-            if isinstance(county, str):
-                county = [county]
-            county = [int(c).zfill(3) for c in county]
-            subset['county_cd'] = county
-
-        # Make sure arrays have been loaded
-        if vars is None:
-            vars = ['PET', 'ETo', 'Solar', 'Albedo',
-                    'Tmin', 'Tmax', 'RHmin', 'RHmax', 'ws2m']
+        if params is None:
+            params = ['PET', 'ETo', 'Solar', 'Albedo',
+                      'Tmin', 'Tmax', 'RHmin', 'RHmax', 'ws2m']
         else:
-            if isinstance(vars, str):
-                vars = [vars]
+            if isinstance(params, str):
+                params = [params]
+
+        # Copy array data into memory
         vardata = {}
-        for v in vars:
+        for v in params:
             vardata[v] = self.get_variable(v)
+
+        # Load the NEXRAD pixel point geometry
         goes_pts = self.load_pts()
+
+        # Begin polling the data
         data = []
         i, j = goes_pts.i.values, goes_pts.j.values
         for k, dt in enumerate(self.times):
@@ -375,32 +314,32 @@ class GoesNetcdfFile(object):
                                     'Lat': goes_pts.latitude.values,
                                     'Lon': goes_pts.longitude.values,
                                     'NRpix': goes_pts.NRpix.values})
-            for v in vars:
+            for v in params:
                 df[v] = vardata[v][k, i, j]
 
-            if subset:
-                for k in subset.keys():
-                    if hasattr(goes_pts, k):
-                        df[k] = goes_pts[k]
+            # Copy information we can use to subset the dataframe
+            # later on
+            subset = ['wmd', 'county_cd']
+            for field in subset:
+                df[field] = goes_pts[field]
 
             data.append(df)
-
         data = pd.concat(data)
-        data.ETo = data.ETo.fillna(-9999)
-        data.PET = data.PET.fillna(-9999)
-        data = data.dropna(subset=['NRpix'])
-        data.NRpix = data.NRpix.astype(int)
+
+        # Fill NaN values with nodata values
+        for p in params:
+            if p in data.columns:
+                data[p] = data[p].fillna(self.fill_value)
+
+        # Drop rows with no NEXRAD pixel ID and reset column dtype
+        # to integer
+        col = 'NRpix'
+        data = data.dropna(subset=[col])
+        data.loc[:, col] = data.loc[:, col].astype(int)
+
+        # Sort by date and NEXRAD pixel ID
         data = data.sort_values(['YYYYMMDD', 'NRpix'])
 
-        subset_data = []
-        if subset:
-            for k, v in subset.items():
-                for vi in v:
-                    subset_data.append(data[data[k] == vi])
-        data = pd.concat(subset_data)
-
-        if fout is not None:
-            data.to_csv(fout, index=False, sep='\t', float_format='%9.3f')
         return data
 
 
@@ -416,12 +355,13 @@ if __name__ == '__main__':
     # plt.show()
 
     ncf = GoesNetcdfFile(r'examples\data\fl.et.2019.v.1.0.nc')
-    ncf.tabularize(fout='test_wmd.txt', wmd=['SRWMD', 'SWFWMD'])
+    tab = ncf.tabularize()
+    print(tab.head())
 
-    asciifile = GoesAsciiFile('test_wmd.txt')
-    a = asciifile.get_array('ETo')
-    plt.imshow(a[0])
-    plt.show()
+    # asciifile = GoesAsciiFile('test_wmd.txt')
+    # a = asciifile.get_array('ETo')
+    # plt.imshow(a[0])
+    # plt.show()
 
     # year = 2018
     # fpth = fr'P:\E2H11_9BD00_StatewideET\Products\GOES_ET\Florida_{year}\Florida_{year}.txt'

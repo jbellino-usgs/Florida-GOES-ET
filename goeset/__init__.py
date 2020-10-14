@@ -1,1 +1,1 @@
-from .goeset import GoesAsciiFile
+from .goeset import GoesAsciiFile, GoesNetcdfFile
