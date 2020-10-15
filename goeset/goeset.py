@@ -221,15 +221,21 @@ class GoesNetcdfFile(object):
         assert os.path.isfile(fpth), s
         self.fpth = fpth
         with netCDF4.Dataset(fpth, 'r') as ncfile:
-            self._x = ncfile.variables['x'][:]
-            self._y = ncfile.variables['y'][:]
+            if 'x' in ncfile.variables.keys():
+                self._x = ncfile.variables['x'][:]
+            else:
+                self._x = None
+            if 'y' in ncfile.variables.keys():
+                self._y = ncfile.variables['y'][:]
+            else:
+                self._y = None
             self._latitude = ncfile.variables['lat'][:]
             self._longitude = ncfile.variables['lon'][:]
             self._strtimes = ncfile.variables['time'][:]
             self._times = pd.date_range(self._strtimes[0],
                                         self._strtimes[-1],
                                         freq='D')
-            self.nrow, self.ncol = self.x.shape
+            self.nrow, self.ncol = len(self._latitude), len(self._longitude)
             self.nday = self.times.shape
             self.fill_value = ncfile.variables['Tmin']._FillValue
             self._names = list(ncfile.variables.keys())
