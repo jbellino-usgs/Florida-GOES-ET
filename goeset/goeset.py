@@ -258,10 +258,6 @@ class GoesNetcdfFile(object):
     def longitude(self):
         return self._longitude
 
-    def get_variable(self, v):
-        with netCDF4.Dataset(self.fpth, 'r') as ncfile:
-            return ncfile.variables[v][:]
-
     def load_pts(self):
         fname = os.path.join(shppth, 'goes_pts.shp')
         return gpd.read_file(fname)
@@ -269,7 +265,7 @@ class GoesNetcdfFile(object):
     def get_array(self, param):
         s = f'Parameter not found: {param}'
         with netCDF4.Dataset(self.fpth, 'r') as ncfile:
-            assert param in ncfile.variables.keys(), s
+            assert param in self.names, s
             return ncfile.variables[param][:]
 
     def tabularize(self, params=None):
@@ -301,7 +297,7 @@ class GoesNetcdfFile(object):
         # Copy array data into memory
         vardata = {}
         for v in params:
-            vardata[v] = self.get_variable(v)
+            vardata[v] = self.get_array(v)
 
         # Load the NEXRAD pixel point geometry
         goes_pts = self.load_pts()
