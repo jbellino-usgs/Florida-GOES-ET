@@ -76,7 +76,9 @@ class GoesAsciiFile(object):
         with open(self.fpth, 'r') as f:
             header = f.readline()
         if 'YYYYMMDD' in header:
-            header = header.strip().split()
+            header = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix', 'PET', 'ETo',
+                      'Solar', 'Albedo', 'RHmax', 'RHmin', 'Tmax', 'Tmin',
+                      'ws2m']
             oldfmt = False
         else:
             oldfmt = True
