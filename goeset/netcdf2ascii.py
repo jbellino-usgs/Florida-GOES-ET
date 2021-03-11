@@ -87,7 +87,10 @@ def main():
         for name, var in src.variables.items():
             if name in ignore:
                 continue
-            d[name_dict[name]] = vardata[name][k, i, j]
+            if len(vardata[name].shape) == 3:
+                d[name_dict[name]] = vardata[name][k, i, j]
+            elif len(vardata[name].shape) == 2:
+                d[name_dict[name]] = vardata[name][i, j]
         data.append(pd.DataFrame(d))
 
     data = pd.concat(data)
