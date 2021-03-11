@@ -77,7 +77,7 @@ def main():
     name_dict = {'ETo': 'RET', 'PET': 'PET', 'Solar': 'RS',
                  'Albedo': 'Albedo', 'RHmax': 'Rhmax',
                  'RHmin': 'Rhmin', 'Tmax': 'Tmax', 'Tmin': 'Tmin',
-                 'ws2m': 'Ws'}
+                 'ws2m': 'Ws', 'WMD': 'WMD', 'FIPS': 'FIPS'}
     for k, dt in enumerate(dates):
         # print('Processing', f'{dt.year}-{dt.month:0>2d}-{dt.day:0>2d}')
         d = {'YYYYMMDD': [f'{dt.year}{dt.month:0>2d}{dt.day:0>2d}'] * len(goes_pts),
