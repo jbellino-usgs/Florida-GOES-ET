@@ -77,17 +77,24 @@ def main():
     name_dict = {'ETo': 'RET', 'PET': 'PET', 'Solar': 'RS',
                  'Albedo': 'Albedo', 'RHmax': 'Rhmax',
                  'RHmin': 'Rhmin', 'Tmax': 'Tmax', 'Tmin': 'Tmin',
-                 'ws2m': 'Ws'}
+                 'ws2m': 'Ws', 'WMD': 'WMD', 'FIPS': 'FIPS'}
     for k, dt in enumerate(dates):
         # print('Processing', f'{dt.year}-{dt.month:0>2d}-{dt.day:0>2d}')
         d = {'YYYYMMDD': [f'{dt.year}{dt.month:0>2d}{dt.day:0>2d}'] * len(goes_pts),
              'Lat': lat,
              'Lon': lon,
              'NRpix': nrpix}
+        if 'WMD' in vardata.keys():
+            d['WMD'] = vardata['WMD']
+        if 'FIPS' in vardata.keys():
+            d['FIPS'] = vardata['FIPS']
         for name, var in src.variables.items():
             if name in ignore:
                 continue
-            d[name_dict[name]] = vardata[name][k, i, j]
+            if len(vardata[name].shape) == 3:
+                d[name_dict[name]] = vardata[name][k, i, j]
+            elif len(vardata[name].shape) == 2:
+                d[name_dict[name]] = vardata[name][i, j]
         data.append(pd.DataFrame(d))
 
     data = pd.concat(data)
@@ -104,7 +111,9 @@ def main():
     data = data.dropna(subset=['NRpix'])
 
     # Ensure pixel numbers are stored as integers
-    data['NRpix'] = data['NRpix'].astype(int)
+    intcols = ['NRpix', 'WMD', 'FIPS']
+    for c in intcols:
+        data[c] = data[c].astype(int)
 
     # Sort the data by date and pixel ID
     data = data.sort_values(['YYYYMMDD', 'NRpix'])
