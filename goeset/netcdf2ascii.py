@@ -62,7 +62,10 @@ def main():
     with netCDF4.Dataset(input_f, 'r') as src:
 
         # Read dates
-        dates = src.variables['time'][:]
+        if 'date' in src.variables.keys():
+            dates = src.variables['date'][:]
+        else:
+            dates = src.variables['time'][:]
         dates = [datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
                  for dt in dates]
 
