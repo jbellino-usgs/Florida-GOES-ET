@@ -66,7 +66,7 @@ def main():
             dates = src.variables['date'][:]
         else:
             dates = src.variables['time'][:]
-        dates = [datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+        dates = [datetime.strptime(dt, '%Y-%m-%d')
                  for dt in dates]
 
         # Read all data arrays
