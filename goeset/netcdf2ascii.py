@@ -58,7 +58,7 @@ def main():
     data = list()
 
     # Read the NetCDF file
-    ignore = ['lat', 'lon', 'time', 'x', 'y', 'Lambert_Conformal', 'SolarCode']
+    ignore = ['lat', 'lon', 'time', 'date', 'x', 'y', 'Lambert_Conformal', 'SolarCode']
     with netCDF4.Dataset(input_f, 'r') as src:
 
         # Read dates
