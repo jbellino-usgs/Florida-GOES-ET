@@ -8,6 +8,32 @@ ancpth = os.path.join(os.path.dirname(__file__), 'ancillary')
 shppth = os.path.join(os.path.dirname(__file__), 'shp')
 
 
+def fill(data, invalid=None):
+    """
+    Taken from https://stackoverflow.com/a/9262129/698809
+
+    Replace the value of invalid 'data' cells (indicated by 'invalid')
+    by the value of the nearest valid data cell
+
+    Input:
+        data:    numpy array of any dimension
+        invalid: a binary array of same shape as 'data'.
+                 data value are replaced where invalid is True
+                 If None (default), use: invalid  = np.isnan(data)
+
+    Output:
+        Return a filled array.
+    """
+    from scipy import ndimage as nd
+
+    if invalid is None: invalid = np.isnan(data)
+
+    ind = nd.distance_transform_edt(invalid,
+                                    return_distances=False,
+                                    return_indices=True)
+    return data[tuple(ind)]
+
+
 class GoesAsciiFile(object):
     """
     A thin wrapper around the Pandas DataFrame class to help read
@@ -74,7 +100,7 @@ class GoesAsciiFile(object):
 
     def get_header(self):
         with open(self.fpth, 'r') as f:
-            header = f.readline()
+            header = f.readline().strip().split()
         if 'YYYYMMDD' in header:
             header = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix', 'PET', 'ETo',
                       'Solar', 'Albedo', 'RHmax', 'RHmin', 'Tmax', 'Tmin',
@@ -114,7 +140,6 @@ class GoesAsciiFile(object):
         data : pandas.DataFrame
 
         """
-        usecols = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix']
 
         # Check specified parameter name against available columns
         if 'usecols' in kwargs.keys():
@@ -123,7 +148,11 @@ class GoesAsciiFile(object):
                 cols = [cols]
             check = all(item in cols for item in self._header)
             assert check, 'One or more parameters pass in the usecols argument are invalid.'
-            usecols = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix'] + cols
+            usecols = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix']
+            for c in cols:
+                if c not in usecols:
+                    usecols.append(c)
+
         else:
             usecols = self._header
 
