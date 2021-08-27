@@ -35,6 +35,11 @@ To install GoesET from the local git repository created in the previous step typ
 
     pip install -e <path/to/local/repository/.>
 
+**Convert ASCII File to NetCDF**
+
+From the command line, convert a legacy ascii text file with tabularized data into a georeferenced, grid-based NetCDF file:
+
+    python ascii2netcdf.py <input ascii file path--required> <output netcdf file path--optional>
 
 Disclaimer
 ----------
