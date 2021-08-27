@@ -123,7 +123,7 @@ class GoesAsciiFile(object):
         """
         if self._df is None or flush:
             self._df = self._read_file(**kwargs)
-            self._dates = pd.to_datetime(self._df['YYYYMMDD'].unique())
+            self._dates = pd.to_datetime(self._df['YYYYMMDD']).unique()
         return self._df
 
     def _read_file(self, **kwargs):
@@ -174,6 +174,12 @@ class GoesAsciiFile(object):
         # Replace nodata values
         data = data.replace(self.nodata_value, np.nan)
 
+        # Add datetime dates
+        data['date'] = pd.to_datetime(data['YYYYMMDD'])
+
+        # Set index
+        data = data.set_index(['date', 'NRpix']).sort_index()
+
         return data
 
     def get_array(self, param, flush=False):
@@ -193,7 +199,7 @@ class GoesAsciiFile(object):
 
         """
         # Check specified parameter name against available columns
-        s = f'Specified parameter "{param}" not recognized.'
+        s = f'Specified parameter "{param}" not recognized. Available parameters:\n  ' + '\n  '.join(self._header)
         assert param.lower() in [p.lower() for p in self._header], s
         param = self._header[[p.lower() for p in self._header].index(param.lower())]
         if flush:
@@ -206,12 +212,12 @@ class GoesAsciiFile(object):
 
         # Get list of unique dates in this file
         try:
-            dates = df.YYYYMMDD.dt.strftime('%Y-%m-%d').unique()
+            dates = df.date.unique()
         except AttributeError:
             # Not datetime objects
             dates = df.YYYYMMDD.unique()
 
-        # Set date index
+        # Set index
         df = df.set_index('NRpix')
 
         a = list()
@@ -295,7 +301,8 @@ class GoesNetcdfFile(object):
     def longitude(self):
         return self._longitude
 
-    def load_pts(self):
+    @staticmethod
+    def load_pts():
         fname = os.path.join(shppth, 'goes_pts.shp')
         return gpd.read_file(fname)
 
