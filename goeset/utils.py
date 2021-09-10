@@ -1,7 +1,5 @@
 import os
-import netCDF4
 import pandas as pd
-import geopandas as gpd
 import numpy as np
 
 ancpth = os.path.join(os.path.dirname(__file__), 'ancillary')
@@ -84,6 +82,7 @@ class GoesAsciiFile(object):
         #     '0=0 +y_0=0 +datum=NAD83 +units=ft +no_defs '
 
         self.pixels = self.get_pixels()
+        self.reference_table = self.get_pixel_reference_table()
         self.nrow, self.ncol = 407, 474
         self._df = None
         self._dates = None
@@ -107,17 +106,34 @@ class GoesAsciiFile(object):
     def header(self):
         return self._header
 
+    @property
+    def latitude(self):
+        return self.pixels.latitude.values.reshape(self.nrow, self.ncol)
+
+    @property
+    def longitude(self):
+        return self.pixels.longitude.values.reshape(self.nrow, self.ncol)
+
     @staticmethod
-    def get_pixels():
+    def get_pixel_reference_table():
         """
         Load the list of pixels.
         :return:
         """
         dtype = {'NRpix': int, 'fips_county': str}
         fname = os.path.join(ancpth, 'pixel_reference.csv')
-        pixels = pd.read_csv(fname, index_col=['NRpix'], dtype=dtype)
-        pixels = pixels.sort_index()
-        return pixels
+        tbl = pd.read_csv(fname, index_col=['NRpix'], dtype=dtype)
+        tbl = tbl.sort_index()
+        return tbl
+
+    @staticmethod
+    def get_pixels():
+        """
+        Load the list of pixels.
+        :return:
+        """
+        fname = os.path.join(ancpth, 'pixels.txt')
+        return pd.read_csv(fname, index_col=['pixel'])
 
     def get_header(self):
         with open(self.fpth, 'r') as f:
@@ -144,7 +160,7 @@ class GoesAsciiFile(object):
         """
         if self._df is None or flush:
             self._df = self._read_file(**kwargs)
-            self._dates = pd.to_datetime(self._df['YYYYMMDD']).unique()
+            self._dates = [pd.Timestamp(t) for t in pd.to_datetime(self._df['YYYYMMDD']).unique()]
         return self._df
 
     def _read_file(self, **kwargs):
@@ -245,17 +261,18 @@ class GoesAsciiFile(object):
         for i, dtstr in enumerate(dates):
             dfi = df[df.YYYYMMDD == dtstr]
             z = np.ones((self.nrow * self.ncol)) * self.nodata_value
-            idx = self.pixels.index.intersection(dfi.index)
-            z[self.pixels.loc[idx, 'sequence_number'] - 1] = dfi.loc[idx, param]
+            idx = self.reference_table.index.intersection(dfi.index)
+            z[self.reference_table.loc[idx, 'sequence_number'] - 1] = dfi.loc[idx, param]
             a.append(z)
 
         array = np.stack(a)
         array = np.ma.masked_equal(array, self.nodata_value)
         array = array.reshape((len(dates), self.nrow, self.ncol), order='f')
-        return array[:, ::-1, ::-1]
+        return array[:, :, ::-1]
 
 
 # class GoesNetcdfFile(object):
+#     import netCDF4
 #     """
 #         A thin wrapper around the netCDF4.Dataset class to help read
 #         and manipulate netcdf files.
