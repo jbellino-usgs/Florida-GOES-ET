@@ -116,7 +116,7 @@ class Pixels(object):
         return seq.ravel()
 
     @property
-    def pixels(self):
+    def data(self):
         return self._pixel_list
 
     @property
@@ -172,7 +172,7 @@ class GoesAsciiFile(object):
         # self.aea_proj4 = '+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-84 +x_' \
         #     '0=0 +y_0=0 +datum=NAD83 +units=ft +no_defs '
 
-        self.pixels = self.get_pixels()
+        self.pixels = Pixels()
         self.reference_table = self.get_pixel_reference_table()
         self.nrow, self.ncol = 407, 474
         self._df = None
@@ -199,11 +199,11 @@ class GoesAsciiFile(object):
 
     @property
     def latitude(self):
-        return self.pixels.latitude.values.reshape(self.nrow, self.ncol)
+        return self.pixels.data.latitude.values.reshape(self.nrow, self.ncol)
 
     @property
     def longitude(self):
-        return self.pixels.longitude.values.reshape(self.nrow, self.ncol)
+        return self.pixels.data.longitude.values.reshape(self.nrow, self.ncol)
 
     @staticmethod
     def get_pixel_reference_table():
@@ -217,14 +217,14 @@ class GoesAsciiFile(object):
         tbl = tbl.sort_index()
         return tbl
 
-    @staticmethod
-    def get_pixels():
-        """
-        Load the list of pixels.
-        :return:
-        """
-        fname = os.path.join(ancpth, 'pixels.txt')
-        return pd.read_csv(fname, index_col=['pixel'])
+    # @staticmethod
+    # def get_pixels():
+    #     """
+    #     Load the list of pixels.
+    #     :return:
+    #     """
+    #     fname = os.path.join(ancpth, 'pixels.txt')
+    #     return pd.read_csv(fname, index_col=['pixel'])
 
     def get_header(self):
         with open(self.fpth, 'r') as f:
@@ -352,14 +352,14 @@ class GoesAsciiFile(object):
         for i, dtstr in enumerate(dates):
             dfi = df[df.YYYYMMDD == dtstr]
             z = np.ones((self.nrow * self.ncol)) * self.nodata_value
-            idx = self.reference_table.index.intersection(dfi.index)
-            z[self.reference_table.loc[idx, 'sequence_number'] - 1] = dfi.loc[idx, param]
+            idx = self.pixels.data.index.intersection(dfi.index)
+            z[self.pixels.data.loc[idx, 'fortran_sequence_number'] - 1] = dfi.loc[idx, param]
             a.append(z)
 
         array = np.stack(a)
         array = np.ma.masked_equal(array, self.nodata_value)
         array = array.reshape((len(dates), self.nrow, self.ncol), order='f')
-        return array[:, :, ::-1]
+        return array[:, ::-1, ::-1]
 
 
 # class GoesNetcdfFile(object):
