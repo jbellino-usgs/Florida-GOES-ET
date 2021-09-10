@@ -1,2 +1,2 @@
-from .utils import GoesAsciiFile
+from .utils import GoesAsciiFile, Pixels
 from .calcs import calc_eto, calc_pet

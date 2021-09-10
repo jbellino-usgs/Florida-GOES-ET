@@ -1,4 +1,5 @@
 import os
+import pyproj
 import pandas as pd
 import numpy as np
 
@@ -21,6 +22,13 @@ lcc_wkt = \
     PARAMETER["Latitude_Of_Origin",50],
     UNIT["Meter",1],
     AUTHORITY["EPSG","102009"]]"""
+
+nad83_wkt = \
+    """GEOGCS["NAD83",
+    DATUM["North_American_Datum_1983",
+    SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],
+    PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],
+    UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]]"""
 
 
 def fill(data, invalid=None):
@@ -47,6 +55,89 @@ def fill(data, invalid=None):
                                     return_distances=False,
                                     return_indices=True)
     return data[tuple(ind)]
+
+
+class Pixels(object):
+    """
+
+    :param object:
+    :return:
+    """
+    def __init__(self):
+        self.nrow, self.ncol = 407, 474
+        self._pixel_list = self.load_pixels()
+
+    def load_pixels(self):
+        fname = os.path.join(ancpth, 'pixels.txt')
+        pix_df = pd.read_csv(fname, index_col=['pixel'], usecols=['pixel', 'latitude', 'longitude'])
+        pix_df = pix_df.loc[self.nrpix_sequence_number]
+
+        nad83 = pyproj.Proj(nad83_wkt)
+        lcc = pyproj.Proj(lcc_wkt)
+        transformer = pyproj.Transformer.from_proj(nad83, lcc)
+        _x, _y = transformer.transform(pix_df.longitude.values,
+                                       pix_df.latitude.values)
+
+        pix_df.loc[:, 'x'] = _x
+        pix_df.loc[:, 'y'] = _y
+
+        i = np.zeros((self.nrow, self.ncol), dtype=int)
+        for ii in range(self.nrow):
+            i[ii, :] += ii
+        j = np.zeros((self.nrow, self.ncol), dtype=int)
+        for jj in range(self.ncol):
+            j[:, jj] += jj
+
+        pix_df.loc[:, 'i'] = i.ravel()
+        pix_df.loc[:, 'j'] = j.ravel()
+
+        pix_df.loc[:, 'fortran_sequence_number'] = self.fortran_sequence_number
+
+        return pix_df
+
+    @property
+    def nrpix_sequence_number(self):
+        """
+        NEXRAD pixel numbering starts at lower-left and increases column-wise.
+
+        """
+        seq = np.array(range(1, (self.nrow * self.ncol) + 1))
+        seq = seq.reshape(self.nrow, self.ncol)
+        return seq[::-1, :].ravel()
+
+    @property
+    def fortran_sequence_number(self):
+        """
+        Fortran sequencing starts at lower-right and increases with column-major order.
+
+        """
+        seq = np.array(range(1, (self.nrow * self.ncol) + 1))[::-1]
+        seq = seq.reshape(self.nrow, self.ncol, order='f')
+        return seq.ravel()
+
+    @property
+    def pixels(self):
+        return self._pixel_list
+
+    @property
+    def pixel_ids(self):
+        return self._pixel_list.index.values
+
+    @property
+    def latitude(self):
+        return self._pixel_list.latitude.values
+
+    @property
+    def longitude(self):
+        return self._pixel_list.longitude.values
+
+    @property
+    def x(self):
+        return self._pixel_list.x.values
+
+    @property
+    def y(self):
+        return self._pixel_list.y.values
 
 
 class GoesAsciiFile(object):
