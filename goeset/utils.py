@@ -7,6 +7,23 @@ import numpy as np
 ancpth = os.path.join(os.path.dirname(__file__), 'ancillary')
 shppth = os.path.join(os.path.dirname(__file__), 'shp')
 
+lcc_wkt = \
+    """PROJCS["North_America_Lambert_Conformal_Conic",
+    GEOGCS["GCS_North_American_1983",
+        DATUM["North_American_Datum_1983",
+            SPHEROID["GRS_1980",6378137,298.257222101]],
+        PRIMEM["Greenwich",0],
+        UNIT["Degree",0.017453292519943295]],
+    PROJECTION["Lambert_Conformal_Conic_2SP"],
+    PARAMETER["False_Easting",5632642.22547],
+    PARAMETER["False_Northing",4612545.65137],
+    PARAMETER["Central_Meridian",-107],
+    PARAMETER["Standard_Parallel_1",50],
+    PARAMETER["Standard_Parallel_2",50],
+    PARAMETER["Latitude_Of_Origin",50],
+    UNIT["Meter",1],
+    AUTHORITY["EPSG","102009"]]"""
+
 
 def fill(data, invalid=None):
     """
@@ -63,8 +80,8 @@ class GoesAsciiFile(object):
         self.fpth = fpth
 
         self.nodata_value = -9999.9
-        self.aea_proj4 = '+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-84 +x_' \
-            '0=0 +y_0=0 +datum=NAD83 +units=ft +no_defs '
+        # self.aea_proj4 = '+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-84 +x_' \
+        #     '0=0 +y_0=0 +datum=NAD83 +units=ft +no_defs '
 
         self.pixels = self.get_pixels()
         self.nrow, self.ncol = 407, 474
@@ -76,10 +93,14 @@ class GoesAsciiFile(object):
 
     @property
     def df(self):
+        if self._df is None:
+            self._df = self.get_dataframe()
         return self._df
 
     @property
     def dates(self):
+        if self._df is None:
+            self._df = self.get_dataframe()
         return self._dates
 
     @property
@@ -178,7 +199,7 @@ class GoesAsciiFile(object):
         data['date'] = pd.to_datetime(data['YYYYMMDD'])
 
         # Set index
-        data = data.set_index(['date', 'NRpix']).sort_index()
+        data = data.set_index(['date', 'NRpix'], drop=False).sort_index()
 
         return data
 
@@ -234,182 +255,151 @@ class GoesAsciiFile(object):
         return array[:, ::-1, ::-1]
 
 
-class GoesNetcdfFile(object):
-    """
-        A thin wrapper around the netCDF4.Dataset class to help read
-        and manipulate netcdf files.
-
-        Attributes
-        ----------
-
-        Methods
-        -------
-
-        Examples
-        --------
-        >>> import goeset
-        >>> ncfile = goeset.GoesNetcdfFile('fl.et.2019.v.1.0.nc')
-        >>> eto = ncfile.get_array('ETo')
-
-        """
-    def __init__(self, fpth):
-
-        s = f'Could not locate input file {fpth}.'
-        assert os.path.isfile(fpth), s
-        self.fpth = fpth
-        with netCDF4.Dataset(fpth, 'r') as ncfile:
-            if 'x' in ncfile.variables.keys():
-                self._x = ncfile.variables['x'][:]
-            else:
-                self._x = None
-            if 'y' in ncfile.variables.keys():
-                self._y = ncfile.variables['y'][:]
-            else:
-                self._y = None
-            self._latitude = ncfile.variables['lat'][:]
-            self._longitude = ncfile.variables['lon'][:]
-            self._strtimes = ncfile.variables['time'][:]
-            self._times = pd.date_range(self._strtimes[0],
-                                        self._strtimes[-1],
-                                        freq='D')
-            self.nrow, self.ncol = len(self._latitude), len(self._longitude)
-            self.nday = self.times.shape
-            self.fill_value = ncfile.variables['Tmin']._FillValue
-            self._names = list(ncfile.variables.keys())
-
-    @property
-    def names(self):
-        return self._names
-
-    @property
-    def times(self):
-        return self._times
-
-    @property
-    def x(self):
-        return self._x
-
-    @property
-    def y(self):
-        return self._y
-
-    @property
-    def latitude(self):
-        return self._latitude
-
-    @property
-    def longitude(self):
-        return self._longitude
-
-    @staticmethod
-    def load_pts():
-        fname = os.path.join(shppth, 'goes_pts.shp')
-        return gpd.read_file(fname)
-
-    def get_array(self, param):
-        s = f'Parameter not found: {param}'
-        with netCDF4.Dataset(self.fpth, 'r') as ncfile:
-            assert param in self.names, s
-            return ncfile.variables[param][:]
-
-    def tabularize(self, params=None):
-        """
-        Tabularize numpy ndarray to legacy ASCII file format.
-
-        Parameters
-        ----------
-        params : str or list of str
-            List of the parameter names to tabularize.
-
-        Returns
-        -------
-        data : pandas.DataFrame
-
-        Examples
-        --------
-        >>> import goeset
-        >>> ncfile = goeset.GoesNetcdfFile('fl.et.2019.v.1.0.nc')
-        >>> tabular_data = ncfile.tabularize()
-        """
-        if params is None:
-            params = ['PET', 'ETo', 'Solar', 'Albedo',
-                      'Tmin', 'Tmax', 'RHmin', 'RHmax', 'ws2m']
-        else:
-            if isinstance(params, str):
-                params = [params]
-
-        # Copy array data into memory
-        vardata = {}
-        for v in params:
-            vardata[v] = self.get_array(v)
-
-        # Load the NEXRAD pixel point geometry
-        goes_pts = self.load_pts()
-
-        # Begin polling the data
-        data = []
-        i, j = goes_pts.i.values, goes_pts.j.values
-        for k, dt in enumerate(self.times):
-            df = pd.DataFrame(data={'YYYYMMDD': [f'{dt.year}{dt.month:0>2d}{dt.day:0>2d}'] * len(goes_pts),
-                                    'Lat': goes_pts.latitude.values,
-                                    'Lon': goes_pts.longitude.values,
-                                    'NRpix': goes_pts.NRpix.values})
-            for v in params:
-                df[v] = vardata[v][k, i, j]
-
-            # Copy information we can use to subset the dataframe
-            # later on
-            subset = ['wmd', 'county_cd']
-            for field in subset:
-                df[field] = goes_pts[field]
-
-            data.append(df)
-        data = pd.concat(data)
-
-        # Fill NaN values with nodata values
-        for p in params:
-            if p in data.columns:
-                data[p] = data[p].fillna(self.fill_value)
-
-        # Drop rows with no NEXRAD pixel ID and reset column dtype
-        # to integer
-        col = 'NRpix'
-        data = data.dropna(subset=[col])
-        data.loc[:, col] = data.loc[:, col].astype(int)
-
-        # Sort by date and NEXRAD pixel ID
-        data = data.sort_values(['YYYYMMDD', 'NRpix'])
-
-        return data
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-
-    # ncf = GoesNetcdfFile(r'examples\data\fl.et.2019.v.1.0.nc')
-    # ncf.tabularize(fout='test.txt', wmd='swf')
-
-    # asciifile = GoesAsciiFile('test.txt')
-    # a = asciifile.get_array('ETo')
-    # plt.imshow(a[0])
-    # plt.show()
-
-    ncf = GoesNetcdfFile(r'examples\data\fl.et.2019.v.1.0.nc')
-    tab = ncf.tabularize()
-    print(tab.head())
-
-    # asciifile = GoesAsciiFile('test_wmd.txt')
-    # a = asciifile.get_array('ETo')
-    # plt.imshow(a[0])
-    # plt.show()
-
-    # year = 2018
-    # fpth = fr'P:\E2H11_9BD00_StatewideET\Products\GOES_ET\Florida_{year}\Florida_{year}.txt'
-    # asciifile = GoesAsciiFile(fpth)
-    # print(asciifile.get_dataframe(nrows=5))
-    # fpth = 'test.txt'
-    # asciifile = GoesAsciiFile(fpth)
-    # print(asciifile.get_dataframe(nrows=5))
-
-
+# class GoesNetcdfFile(object):
+#     """
+#         A thin wrapper around the netCDF4.Dataset class to help read
+#         and manipulate netcdf files.
+#
+#         Attributes
+#         ----------
+#
+#         Methods
+#         -------
+#
+#         Examples
+#         --------
+#         >>> import goeset
+#         >>> ncfile = goeset.GoesNetcdfFile('fl.et.2019.v.1.0.nc')
+#         >>> eto = ncfile.get_array('ETo')
+#
+#         """
+#     def __init__(self, fpth):
+#
+#         s = f'Could not locate input file {fpth}.'
+#         assert os.path.isfile(fpth), s
+#         self.fpth = fpth
+#         with netCDF4.Dataset(fpth, 'r') as ncfile:
+#             if 'x' in ncfile.variables.keys():
+#                 self._x = ncfile.variables['x'][:]
+#             else:
+#                 self._x = None
+#             if 'y' in ncfile.variables.keys():
+#                 self._y = ncfile.variables['y'][:]
+#             else:
+#                 self._y = None
+#             self._latitude = ncfile.variables['lat'][:]
+#             self._longitude = ncfile.variables['lon'][:]
+#             self._strtimes = ncfile.variables['time'][:]
+#             self._times = pd.date_range(self._strtimes[0],
+#                                         self._strtimes[-1],
+#                                         freq='D')
+#             self.nrow, self.ncol = len(self._latitude), len(self._longitude)
+#             self.nday = self.times.shape
+#             self.fill_value = ncfile.variables['Tmin']._FillValue
+#             self._names = list(ncfile.variables.keys())
+#
+#     @property
+#     def names(self):
+#         return self._names
+#
+#     @property
+#     def times(self):
+#         return self._times
+#
+#     @property
+#     def x(self):
+#         return self._x
+#
+#     @property
+#     def y(self):
+#         return self._y
+#
+#     @property
+#     def latitude(self):
+#         return self._latitude
+#
+#     @property
+#     def longitude(self):
+#         return self._longitude
+#
+#     @staticmethod
+#     def load_pts():
+#         fname = os.path.join(shppth, 'goes_pts.shp')
+#         return gpd.read_file(fname)
+#
+#     def get_array(self, param):
+#         s = f'Parameter not found: {param}'
+#         with netCDF4.Dataset(self.fpth, 'r') as ncfile:
+#             assert param in self.names, s
+#             return ncfile.variables[param][:]
+#
+#     def tabularize(self, params=None):
+#         """
+#         Tabularize numpy ndarray to legacy ASCII file format.
+#
+#         Parameters
+#         ----------
+#         params : str or list of str
+#             List of the parameter names to tabularize.
+#
+#         Returns
+#         -------
+#         data : pandas.DataFrame
+#
+#         Examples
+#         --------
+#         >>> import goeset
+#         >>> ncfile = goeset.GoesNetcdfFile('fl.et.2019.v.1.0.nc')
+#         >>> tabular_data = ncfile.tabularize()
+#         """
+#         if params is None:
+#             params = ['PET', 'ETo', 'Solar', 'Albedo',
+#                       'Tmin', 'Tmax', 'RHmin', 'RHmax', 'ws2m']
+#         else:
+#             if isinstance(params, str):
+#                 params = [params]
+#
+#         # Copy array data into memory
+#         vardata = {}
+#         for v in params:
+#             vardata[v] = self.get_array(v)
+#
+#         # Load the NEXRAD pixel point geometry
+#         goes_pts = self.load_pts()
+#
+#         # Begin polling the data
+#         data = []
+#         i, j = goes_pts.i.values, goes_pts.j.values
+#         for k, dt in enumerate(self.times):
+#             df = pd.DataFrame(data={'YYYYMMDD': [f'{dt.year}{dt.month:0>2d}{dt.day:0>2d}'] * len(goes_pts),
+#                                     'Lat': goes_pts.latitude.values,
+#                                     'Lon': goes_pts.longitude.values,
+#                                     'NRpix': goes_pts.NRpix.values})
+#             for v in params:
+#                 df[v] = vardata[v][k, i, j]
+#
+#             # Copy information we can use to subset the dataframe
+#             # later on
+#             subset = ['wmd', 'county_cd']
+#             for field in subset:
+#                 df[field] = goes_pts[field]
+#
+#             data.append(df)
+#         data = pd.concat(data)
+#
+#         # Fill NaN values with nodata values
+#         for p in params:
+#             if p in data.columns:
+#                 data[p] = data[p].fillna(self.fill_value)
+#
+#         # Drop rows with no NEXRAD pixel ID and reset column dtype
+#         # to integer
+#         col = 'NRpix'
+#         data = data.dropna(subset=[col])
+#         data.loc[:, col] = data.loc[:, col].astype(int)
+#
+#         # Sort by date and NEXRAD pixel ID
+#         data = data.sort_values(['YYYYMMDD', 'NRpix'])
+#
+#         return data
 
