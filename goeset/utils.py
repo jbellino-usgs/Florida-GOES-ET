@@ -67,20 +67,20 @@ class Pixels(object):
         self.nrow, self.ncol = 407, 474
         self._pixel_list = self.load_pixels()
 
-    def load_pixels(self):
-        fname = os.path.join(ancpth, 'pixels.txt')
-        pix_df = pd.read_csv(fname, index_col=['pixel'], usecols=['pixel', 'latitude', 'longitude'])
-        pix_df = pix_df.loc[self.nrpix_sequence_number]
-
+        # Add projected coordinates
         nad83 = pyproj.Proj(nad83_wkt)
         lcc = pyproj.Proj(lcc_wkt)
         transformer = pyproj.Transformer.from_proj(nad83, lcc)
-        _x, _y = transformer.transform(pix_df.longitude.values,
-                                       pix_df.latitude.values)
+        _x, _y = transformer.transform(self._pixel_list.longitude.values,
+                                       self._pixel_list.latitude.values)
 
-        pix_df.loc[:, 'x'] = _x
-        pix_df.loc[:, 'y'] = _y
+        self._pixel_list.loc[:, 'x'] = _x
+        self._pixel_list.loc[:, 'y'] = _y
 
+        # Reorder pixels based on NEXRAD sequencing
+        self._pixel_list = self._pixel_list.loc[self.calc_nrpix_sequence_number()]
+
+        # Add row/column information
         i = np.zeros((self.nrow, self.ncol), dtype=int)
         for ii in range(self.nrow):
             i[ii, :] += ii
@@ -88,27 +88,39 @@ class Pixels(object):
         for jj in range(self.ncol):
             j[:, jj] += jj
 
-        pix_df.loc[:, 'i'] = i.ravel()
-        pix_df.loc[:, 'j'] = j.ravel()
+        self._pixel_list.loc[:, 'i'] = i.ravel()
+        self._pixel_list.loc[:, 'j'] = j.ravel()
 
-        pix_df.loc[:, 'fortran_sequence_number'] = self.fortran_sequence_number
+        # Add sequence numbers
+        self._pixel_list.loc[:, 'sequence_number'] = self.calc_sequence_number()
+        self._pixel_list.loc[:, 'nrpix_sequence_number'] = self.calc_nrpix_sequence_number()
+        self._pixel_list.loc[:, 'fortran_sequence_number'] = self.calc_fortran_sequence_number()
 
+    @staticmethod
+    def load_pixels():
+        fname = os.path.join(ancpth, 'pixels.txt')
+        pix_df = pd.read_csv(fname, index_col=['pixel'], usecols=['pixel', 'latitude', 'longitude'])
         return pix_df
 
-    @property
-    def nrpix_sequence_number(self):
+    def calc_sequence_number(self):
         """
-        NEXRAD pixel numbering starts at lower-left and increases column-wise.
+        Pixel numbering starts at upper-left and increases with row-major order.
+
+        """
+        return np.array(range(1, (self.nrow * self.ncol) + 1))
+
+    def calc_nrpix_sequence_number(self):
+        """
+        Pixel numbering starts at lower-left and increases with row-major order.
 
         """
         seq = np.array(range(1, (self.nrow * self.ncol) + 1))
         seq = seq.reshape(self.nrow, self.ncol)
         return seq[::-1, :].ravel()
 
-    @property
-    def fortran_sequence_number(self):
+    def calc_fortran_sequence_number(self):
         """
-        Fortran sequencing starts at lower-right and increases with column-major order.
+        Pixel numbering starts at lower-right and increases with column-major order.
 
         """
         seq = np.array(range(1, (self.nrow * self.ncol) + 1))[::-1]
@@ -116,28 +128,32 @@ class Pixels(object):
         return seq.ravel()
 
     @property
-    def data(self):
-        return self._pixel_list
+    def i(self):
+        return self._pixel_list.loc[:, 'i'].copy()
 
     @property
-    def pixel_ids(self):
-        return self._pixel_list.index.values
-
-    @property
-    def latitude(self):
-        return self._pixel_list.latitude.values
-
-    @property
-    def longitude(self):
-        return self._pixel_list.longitude.values
+    def j(self):
+        return self._pixel_list.loc[:, 'j'].copy()
 
     @property
     def x(self):
-        return self._pixel_list.x.values
+        return self._pixel_list.loc[:, 'x'].copy()
 
     @property
     def y(self):
-        return self._pixel_list.y.values
+        return self._pixel_list.loc[:, 'y'].copy()
+
+    @property
+    def latitude(self):
+        return self._pixel_list.loc[:, 'latitude'].copy()
+
+    @property
+    def longitude(self):
+        return self._pixel_list.loc[:, 'longitude'].copy()
+
+    @property
+    def data(self):
+        return self._pixel_list
 
 
 class GoesAsciiFile(object):
@@ -353,13 +369,13 @@ class GoesAsciiFile(object):
             dfi = df[df.YYYYMMDD == dtstr]
             z = np.ones((self.nrow * self.ncol)) * self.nodata_value
             idx = self.pixels.data.index.intersection(dfi.index)
-            z[self.pixels.data.loc[idx, 'fortran_sequence_number'] - 1] = dfi.loc[idx, param]
+            z[self.pixels.data.loc[idx, 'sequence_number'] - 1] = dfi.loc[idx, param]
             a.append(z)
 
         array = np.stack(a)
         array = np.ma.masked_equal(array, self.nodata_value)
-        array = array.reshape((len(dates), self.nrow, self.ncol), order='f')
-        return array[:, ::-1, ::-1]
+        array = array.reshape((len(dates), self.nrow, self.ncol))
+        return array
 
 
 # class GoesNetcdfFile(object):
