@@ -70,9 +70,14 @@ class Pixels(object):
         # Add projected coordinates
         nad83 = pyproj.Proj(nad83_wkt)
         lcc = pyproj.Proj(lcc_wkt)
-        transformer = pyproj.Transformer.from_proj(nad83, lcc)
-        _x, _y = transformer.transform(self._pixel_list.longitude.values,
-                                       self._pixel_list.latitude.values)
+        # transformer = pyproj.Transformer.from_crs(nad83, lcc)
+        # _x, _y = transformer.transform(self._pixel_list.longitude.values,
+        #                                self._pixel_list.latitude.values)
+        _x, _y = pyproj.transform(nad83,
+                                  lcc,
+                                  self._pixel_list.latitude.values,
+                                  self._pixel_list.longitude.values
+                                  )
         self.proj = lcc
 
         self._pixel_list.loc[:, 'x'] = _x
