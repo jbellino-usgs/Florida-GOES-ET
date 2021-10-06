@@ -5,6 +5,15 @@ This code repository was developed to provide a programmatic interface with lega
 
 Utilities in this repository allow a user to read the tabular data into a Pandas.DataFrame object or, alternatively, as numpy.ndarray objects. See the example jupyter notebooks in the `goeset/examples/` directory.
 
+Penman-Monteith calculated reference evapotranspiration:
+
+![Penman-Monteith](img/penman-monteith_ETo.png?raw=true)
+
+Priestley-Taylor calculated potential evapotranspiration:
+
+![Priestley-Taylor](img/priestley-taylor_PET.png?raw=true)
+
+
 Installation
 -----------------------------------------------
 
