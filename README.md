@@ -7,11 +7,11 @@ Utilities in this repository allow a user to read the tabular data into a Pandas
 
 Penman-Monteith calculated reference evapotranspiration:
 
-![Penman-Monteith](img/penman-monteith_ETo.png?raw=true)
+![Penman-Monteith](goeset/img/penman-monteith_ETo.png?raw=true)
 
 Priestley-Taylor calculated potential evapotranspiration:
 
-![Priestley-Taylor](img/priestley-taylor_PET.png?raw=true)
+![Priestley-Taylor](goeset/img/priestley-taylor_PET.png?raw=true)
 
 
 Installation
