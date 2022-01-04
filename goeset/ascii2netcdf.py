@@ -61,36 +61,68 @@ def main():
     # Get tabular data
     df = asciifile.get_dataframe()
 
-    times = df.YYYYMMDD.unique()
+    dates = np.array([datetime.strptime(dstr, '%Y%m%d') for dstr in df.YYYYMMDD.unique()])
 
     with nc.Dataset(output_f, mode='w') as ncfile:
-        title = f'Automatically generated from input file {input_f}'
+        title = f'Automatically generated from input file {os.path.abspath(input_f)}'
         ncfile.title = title
         ncfile.createDimension('lat', nrow)  # latitude axis
         ncfile.createDimension('lon', ncol)  # longitude axis
-        ncfile.createDimension('time', len(times))  # unlimited axis (can be appended to).
+        ncfile.createDimension('time', len(dates))  # unlimited axis (can be appended to).
 
         # Define two variables with the same names as dimensions,
         # a conventional way to define "coordinate variables".
-        lat = ncfile.createVariable('lat', np.float32, ('lat',))
+        lat = ncfile.createVariable('lat',
+                                    np.float32,
+                                    ('lat',),
+                                    zlib=True,
+                                    complevel=4,
+                                    least_significant_digit=None)
         lat[:] = np.unique(latarr)
 
-        lon = ncfile.createVariable('lon', np.float32, ('lon',))
+        lon = ncfile.createVariable('lon',
+                                    np.float32,
+                                    ('lon',),
+                                    zlib=True,
+                                    complevel=4,
+                                    least_significant_digit=None)
         lon.units = 'degrees_east'
         lon.long_name = 'longitude'
         lon[:] = np.unique(lonarr)
 
-        time = ncfile.createVariable('time', str, ('time',))
-        time.units = 'YYYYMMDD'
-        time.long_name = 'ascii date string: 4-digit year, 2-digit month, 2-digit day'
+        # Store times
+        time = ncfile.createVariable('time',
+                                     np.int32,
+                                     ('time',),
+                                     zlib=True,
+                                     complevel=4,
+                                     least_significant_digit=None)
+        origin_str = '1985-1-1 00:00:00'
+        origin_dt = datetime.strptime(origin_str, '%Y-%m-%d %H:%M:%S')
+        times = np.array([tdelta.days for tdelta in dates - origin_dt])
+        time.units = f'days since {origin_str}'
+        time.long_name = f'Time, in days since {origin_str}'
+        time.var_desc = f'Time, in days since {origin_str}'
         time[:] = times
+
+        # Store dates
+        date = ncfile.createVariable('date',
+                                     str,
+                                     ('time',),
+                                     zlib=True,
+                                     complevel=4,
+                                     least_significant_digit=None)
+        date.units = 'YYYYMMDD'
+        date.long_name = 'ASCII date string: 4-digit year, 2-digit month, 2-digit day'
+        for idx, dt in enumerate(dates):
+            date[idx] = str(dt.date())
 
         ignore = ['YYYYMMDD', 'Lat', 'Lon', 'NRpix']
         for c in asciifile.header:
             if c in ignore:
                 continue
             p = ncfile.createVariable(c,
-                                      np.float64,
+                                      np.float32,
                                       ('time', 'lat', 'lon'),
                                       zlib=True,
                                       complevel=4,
