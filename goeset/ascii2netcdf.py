@@ -78,6 +78,8 @@ def main():
                                     zlib=True,
                                     complevel=4,
                                     least_significant_digit=None)
+        lat.units = 'degrees_north'
+        lat.long_name = 'latitude'
         lat[:] = np.unique(latarr)
 
         lon = ncfile.createVariable('lon',
