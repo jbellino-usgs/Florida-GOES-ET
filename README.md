@@ -31,11 +31,11 @@ GoesET requires **NumPy** 1.18 (or higher), **Pandas** 1.0.5 (or higher), and **
 
 To clone the repository via SSH to your local machine type:
     
-    git clone git@code.usgs.gov:jbellino/florida-goes-et.git
+    git clone git@github.com:jbellino-usgs/Florida-GOES-ET.git
     
 To clone the repository via HTTPS to your local machine type:
 
-    git clone https://code.usgs.gov/jbellino/florida-goes-et.git
+    git clone https://github.com/jbellino-usgs/Florida-GOES-ET.git
 
 
 **Installing from the git repository:**
