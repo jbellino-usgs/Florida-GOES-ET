@@ -115,10 +115,8 @@ def calc_rnl(tmin, tmax, ea, fcd):
         Maximum daily air temperature, in degrees Celsius
     ea : numpy ndarray
         Actual vapor pressure
-    *fcd : numpy ndarray
+    fcd : numpy ndarray
         Total solar radiation divided by clear-sky solar radiation
-
-    * Not in equation 39 of Allen (1998), logic was present in Fortran script provided by W.B. Shoemaker
     """
     return stefan_MJ * (((tmax + 273.15) ** 4. + (tmin + 273.15) ** 4.) / 2.) * (0.34 - 0.14 * np.sqrt(ea)) * fcd
 
