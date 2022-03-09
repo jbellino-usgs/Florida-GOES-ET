@@ -287,7 +287,7 @@ def calc_rld(rldc, clf, t):
     """
     s = 'Please enter a cloud-fraction value less than or equal to 1.0 and ' \
         'greater than or equal to 0.0.'
-    assert np.all((0 <= clf) & (clf <= 1), where=(~np.isnan(clf))), s
+    assert np.all((0 <= clf) & (clf <= 1)), s
     return rldc * (1. - clf) + clf * stefan_W * (t + 273.15) ** 4.
 
 
